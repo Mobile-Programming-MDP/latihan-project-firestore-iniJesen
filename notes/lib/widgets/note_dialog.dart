@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -32,7 +32,7 @@ class _NoteDialogState extends State<NoteDialog> {
   }
 
   Future<void> _getLocation() async {
-    final location = await LocationService().getCurrentLocation();
+    final location = await LocationService().getCurrentLocaton();
     setState(() {
       _position = location;
     });
@@ -47,28 +47,31 @@ class _NoteDialogState extends State<NoteDialog> {
     }
   }
 
-  Future<void> _showImageSourceDialog() async {
-    showDialog(
+  void _showImageSourceActionSheet(BuildContext context) {
+    showModalBottomSheet(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Select Image Source'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _pickImage(ImageSource.camera);
-              },
-              child: const Text('Camera'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _pickImage(ImageSource.gallery);
-              },
-              child: const Text('Gallery'),
-            ),
-          ],
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library),
+                title: Text('Gallery'),
+                onTap: () {
+                  _pickImage(ImageSource.gallery);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_camera),
+                title: Text('Camera'),
+                onTap: () {
+                  _pickImage(ImageSource.camera);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         );
       },
     );
@@ -78,46 +81,57 @@ class _NoteDialogState extends State<NoteDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.note == null ? 'Add Notes' : 'Update Notes'),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Title: ', textAlign: TextAlign.start),
-            TextField(controller: _titleController),
-            const Padding(
-              padding: EdgeInsets.only(top: 20),
-              child: Text('Description: '),
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Title: ',
+            textAlign: TextAlign.start,
+          ),
+          TextField(
+            controller: _titleController,
+          ),
+          const Padding(
+            padding: EdgeInsets.only(top: 20),
+            child: Text(
+              'Description: ',
             ),
-            TextField(controller: _descriptionController),
-            const Padding(
-              padding: EdgeInsets.only(top: 20),
-              child: Text('Image: '),
+          ),
+          TextField(
+            controller: _descriptionController,
+          ),
+          const Padding(
+            padding: EdgeInsets.only(
+              top: 20,
             ),
-            SizedBox(
-              height: 200,
-              child: _imageFile != null
-                  ? Image.file(File(_imageFile!.path), fit: BoxFit.cover)
-                  : (widget.note?.imageUrl != null &&
-                          Uri.parse(widget.note!.imageUrl!).isAbsolute
-                      ? Image.network(widget.note!.imageUrl!, fit: BoxFit.cover)
-                      : Container()),
-            ),
-            TextButton(
-              onPressed: _showImageSourceDialog,
-              child: const Text('Pick Image'),
-            ),
-            TextButton(
-              onPressed: _getLocation,
-              child: const Text('Get Location'),
-            ),
-            Text(
-              _position?.latitude != null && _position?.longitude != null
-                  ? "Current Location : ${_position!.latitude.toString()}, ${_position!.longitude.toString()}"
-                  : "Current Location : ${widget.note?.lat}, ${widget.note?.lng}",
-              textAlign: TextAlign.start,
-            )
-          ],
-        ),
+            child: Text('Image : '),
+          ),
+          Expanded(
+            child: _imageFile != null
+                ? Image.file(io.File(_imageFile!.path), fit: BoxFit.cover)
+                : (widget.note?.imageUrl != null &&
+                        Uri.parse(widget.note!.imageUrl!).isAbsolute
+                    ? Image.network(
+                        widget.note!.imageUrl!,
+                        fit: BoxFit.cover,
+                      )
+                    : Container()),
+          ),
+          TextButton(
+            onPressed: () => _showImageSourceActionSheet(context),
+            child: const Text('Pick Image : '),
+          ),
+          TextButton(
+            onPressed: _getLocation,
+            child: const Text('Get Location : '),
+          ),
+          Text(
+            _position?.latitude != null && _position?.longitude != null
+                ? "Current Location =: ${_position!.latitude.toString()}, ${_position!.longitude.toString()} "
+                : "Current Location =: ${widget.note?.lat}, ${widget.note?.lng}",
+            textAlign: TextAlign.start,
+          )
+        ],
       ),
       actions: [
         Padding(
@@ -131,37 +145,46 @@ class _NoteDialogState extends State<NoteDialog> {
         ),
         ElevatedButton(
           onPressed: () async {
-            String? imageUrl = widget.note?.imageUrl;
+            String? imageUrl;
+
+            // Cek apakah ada gambar yang dipilih
             if (_imageFile != null) {
+              // Jika ada gambar dipilih, unggah gambar ke server
               imageUrl = await NoteService.uploadImage(_imageFile!);
-              if (imageUrl == null) {
-                // Show error message if the image upload failed
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to upload image')),
-                );
-                return;
-              }
+            } else {
+              imageUrl = widget.note?.imageUrl;
             }
 
+            // Ambil lokasi saat ini jika tidak ada lokasi yang tersedia sebelumnya
+            String latitude = _position?.latitude.toString() ??
+                widget.note?.lat.toString() ??
+                "";
+            String longitude = _position?.longitude.toString() ??
+                widget.note?.lng.toString() ??
+                "";
+
+            // Buat objek Note sesuai kondisi
             Note note = Note(
               id: widget.note?.id,
               title: _titleController.text,
               description: _descriptionController.text,
-              imageUrl: imageUrl,
-              lat: widget.note?.lat.toString() != _position?.latitude.toString()
-                  ? _position?.latitude.toString()
-                  : widget.note?.lat.toString(),
-              lng: widget.note?.lng.toString() != _position?.longitude.toString()
-                  ? _position?.longitude.toString()
-                  : widget.note?.lng.toString(),
+              imageUrl:
+                  imageUrl, // imageUrl bisa null jika tidak ada gambar yang dipilih
+              lat: latitude,
+              lng: longitude,
               createdAt: widget.note?.createdAt,
             );
+
+            // Jika sedang menambah catatan baru
             if (widget.note == null) {
-              await NoteService.addNote(note);
-              Navigator.of(context).pop();
+              NoteService.addNote(note).whenComplete(() {
+                Navigator.of(context).pop();
+              });
             } else {
-              await NoteService.updateNote(note);
-              Navigator.of(context).pop();
+              // Jika sedang memperbarui catatan yang ada
+              NoteService.updateNote(note).whenComplete(() {
+                Navigator.of(context).pop();
+              });
             }
           },
           child: Text(widget.note == null ? 'Add' : 'Update'),

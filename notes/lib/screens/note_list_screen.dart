@@ -4,23 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:notes/models/note.dart';
 import 'package:notes/screens/google_maps_screen.dart';
 import 'package:notes/services/note_service.dart';
+import 'package:notes/theme_provider.dart';
 import 'package:notes/widgets/note_dialog.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+class NoteListScreen extends StatelessWidget {
+  const NoteListScreen({Key? key}) : super(key: key);
 
-class NoteListScreen extends StatefulWidget {
-  final VoidCallback toggleTheme;
-
-  const NoteListScreen({Key? key, required this.toggleTheme}) : super(key: key);
-
-  @override
-  State<NoteListScreen> createState() => _NoteListScreenState();
-}
-
-class _NoteListScreenState extends State<NoteListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,8 +22,12 @@ class _NoteListScreenState extends State<NoteListScreen> {
         title: const Text('Notes'),
         actions: [
           IconButton(
-            icon: Icon(Icons.dark_mode),
-            onPressed: widget.toggleTheme,
+            icon: Icon(Provider.of<ThemeProvider>(context).isDarkMode
+                ? Icons.light_mode
+                : Icons.dark_mode),
+            onPressed: () {
+              Provider.of<ThemeProvider>(context, listen: false).toggleTheme();
+            },
           ),
         ],
       ),
@@ -50,9 +48,8 @@ class _NoteListScreenState extends State<NoteListScreen> {
   }
 }
 
-
 class NoteList extends StatelessWidget {
-  const NoteList({super.key});
+  const NoteList({Key? key});
 
   @override
   Widget build(BuildContext context) {
@@ -74,22 +71,21 @@ class NoteList extends StatelessWidget {
                 return Card(
                   child: Column(
                     children: [
-                      document.imageUrl != null &&
-                              Uri.parse(document.imageUrl!).isAbsolute
-                          ? ClipRRect(
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(16),
-                                topRight: Radius.circular(16),
-                              ),
-                              child: Image.network(
-                                document.imageUrl!,
-                                width: double.infinity,
-                                height: 150,
-                                fit: BoxFit.cover,
-                                alignment: Alignment.center,
-                              ),
-                            )
-                          : Container(),
+                      if (document.imageUrl != null &&
+                          Uri.parse(document.imageUrl!).isAbsolute)
+                        ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                          ),
+                          child: Image.network(
+                            document.imageUrl!,
+                            width: double.infinity,
+                            height: 150,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                          ),
+                        ),
                       ListTile(
                         onTap: () {
                           showDialog(
@@ -107,34 +103,38 @@ class NoteList extends StatelessWidget {
                             InkWell(
                               onTap: () async {
                                 Navigator.push(
-                                  context, 
+                                  context,
                                   MaterialPageRoute(
                                     builder: (context) => GoogleMapsScreen(
-                                      latitude: double.parse(document.lat!), 
-                                      longitude: double.parse(document.lng!)
+                                      latitude: double.parse(document.lat!),
+                                      longitude: double.parse(document.lng!),
                                     ),
                                   ),
                                 );
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 10),
-                                child: Icon(Icons.location_on_outlined),
+                                child: Icon(Icons.map),
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(
+                              width: 10,
+                            ),
                             InkWell(
                               onTap: () {
-                                _shareNote(document);
+                                // _shareImage(document);
+                                Share.share(
+                                    "title: ${document.title}\ndeskripsi: ${document.description}\ngambar:${document.imageUrl}\nalamat:${document.lat} ${document.lng}");
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 10),
-                                child: Icon(Icons.ios_share_outlined),
+                                child: Icon(Icons.share),
                               ),
                             ),
                             const SizedBox(width: 10),
                             InkWell(
                               onTap: () {
-                                showAlertDialog(context, document);
+                                _showDeleteDialog(context, document);
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 10),
@@ -154,7 +154,7 @@ class NoteList extends StatelessWidget {
     );
   }
 
-  void _shareNote(Note document) async {
+  void _shareImage(Note document) async {
     try {
       final response = await http.get(Uri.parse(document.imageUrl!));
       final documentDirectory = (await getTemporaryDirectory()).path;
@@ -162,9 +162,8 @@ class NoteList extends StatelessWidget {
       imgFile.writeAsBytesSync(response.bodyBytes);
 
       final message =
-          'Title: ${document.title}'
-          '\nDescription: ${document.description}'
-          '\nLocation: https://www.google.com/maps/search/?api=1&query=${document.lat},${document.lng}';
+          'Title: ${document.title}\nDescription: ${document.description}\n'
+          'Location: https://www.google.com/maps/search/?api=1&query=${document.lat},${document.lng}';
 
       Share.shareXFiles([XFile(imgFile.path)], text: message);
     } catch (e) {
@@ -172,13 +171,14 @@ class NoteList extends StatelessWidget {
     }
   }
 
-  Future<void> _launchUrl(_url) async {
-    if(!await launchUrl(_url)) {
-      throw Exception('Could not launch $_url');
+  Future<void> _launchUrl(String url) async {
+    if (!await canLaunch(url)) {
+      throw Exception('Could Not Launch $url');
     }
+    await launch(url);
   }
 
-  showAlertDialog(BuildContext context, Note document) {
+  void _showDeleteDialog(BuildContext context, Note document) {
     Widget cancelButton = ElevatedButton(
       child: const Text("No"),
       onPressed: () {

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_config/flutter_config.dart';
 import 'package:notes/firebase_options.dart';
 import 'package:notes/screens/note_list_screen.dart';
+import 'package:notes/theme_provider.dart';
+import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,31 +17,28 @@ void main() async {
   if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
     await FlutterConfig.loadEnvVariables();
   }
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool _isDarkMode = false; // Atur ke true untuk mode gelap, false untuk mode terang
-
-  void toggleTheme() {
-    setState(() {
-      _isDarkMode = !_isDarkMode;
-    });
-  }
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Notes App',
-      theme: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      home: NoteListScreen(toggleTheme: toggleTheme,),
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return MaterialApp(
+          title: 'Notes App',
+          theme: themeProvider.themeData,
+          debugShowCheckedModeBanner: false,
+          home: const NoteListScreen(),
+        );
+      },
     );
   }
 }
